@@ -1,0 +1,29 @@
+name: Pipeline CI - Fase 1
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  checkout-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar Dependências
+        run: npm install
+
+      # - name: Executar Lint
+      #   run: npm run lint
+
+      - name: Executar Testes Automatizados
+        run: npm test

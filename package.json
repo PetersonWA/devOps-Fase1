@@ -1,0 +1,11 @@
+{
+  "name": "projeto-devops-fase1",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node test.js",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}
