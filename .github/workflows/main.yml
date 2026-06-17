@@ -113,7 +113,8 @@ jobs:
       - name: Escanear imagem com Trivy
         run: |
           trivy image \
-            --exit-code 0 \
+            --exit-code 1 \
+            --ignore-unfixed \
             --severity CRITICAL,HIGH \
             --format table \
             ${IMAGE_LOWER}:latest
@@ -124,7 +125,7 @@ jobs:
   # ============================================================
   # ETAPA 4: Deploy em Staging
   # Só executa na branch main/master após build e scan
-  # ============================================================
+  # =====================================================
   deploy-staging:
     name: CD - Deploy em Staging
     runs-on: ubuntu-latest
