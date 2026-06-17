@@ -107,13 +107,16 @@ jobs:
       - name: Definir nome da imagem em minúsculas
         run: echo "IMAGE_LOWER=$(echo ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
+      - name: Instalar Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Escanear imagem com Trivy
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ env.IMAGE_LOWER }}:latest
-          format: 'table'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
+        run: |
+          trivy image \
+            --exit-code 0 \
+            --severity CRITICAL,HIGH \
+            --format table \
+            ${IMAGE_LOWER}:latest
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
