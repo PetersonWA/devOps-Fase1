@@ -104,10 +104,13 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      - name: Definir nome da imagem em minúsculas
+        run: echo "IMAGE_LOWER=$(echo ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Escanear imagem com Trivy
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          image-ref: ${{ env.IMAGE_LOWER }}:latest
           format: 'table'
           exit-code: '0'
           severity: 'CRITICAL,HIGH'
