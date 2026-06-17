@@ -1,0 +1,54 @@
+version: '3.8'
+
+# ============================================================
+# Docker Compose - DevOps Fase 2
+# Orquestração local da aplicação
+# ============================================================
+
+services:
+  # Aplicação principal
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: devops-fase2-app:local
+    container_name: devops-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - APP_VERSION=2.0.0
+      - PORT=3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - devops-network
+
+  # Ambiente de desenvolvimento (sem restart automático)
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: devops-fase2-app:dev
+    container_name: devops-app-dev
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - APP_VERSION=2.0.0-dev
+      - PORT=3000
+    profiles:
+      - dev
+    networks:
+      - devops-network
+
+networks:
+  devops-network:
+    driver: bridge

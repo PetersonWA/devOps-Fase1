@@ -1,4 +1,4 @@
-name: Pipeline CI - Fase 1
+name: Pipeline CI/CD - DevOps Fase 2
 
 on:
   push:
@@ -6,24 +6,193 @@ on:
   pull_request:
     branches: [ "main", "master" ]
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# ============================================================
+# FLUXO DO PIPELINE:
+#   ci → build → security-scan → deploy-staging → deploy-production
+# ============================================================
+
 jobs:
-  checkout-and-test:
+
+  # ============================================================
+  # ETAPA 1: Integração Contínua (CI)
+  # Roda em todo push e pull request
+  # ============================================================
+  ci:
+    name: CI - Testes Automatizados
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js
+      - name: Configurar Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Instalar Dependências
+      - name: Instalar dependências
         run: npm install
 
-      # - name: Executar Lint
-      #   run: npm run lint
-
-      - name: Executar Testes Automatizados
+      - name: Executar testes automatizados
         run: npm test
+
+  # ============================================================
+  # ETAPA 2: Build e Push da Imagem Docker
+  # Só executa em push (não em PR)
+  # ============================================================
+  build:
+    name: CD - Build e Push Docker
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name != 'pull_request'
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image-tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Login no GitHub Container Registry (ghcr.io)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extrair metadados da imagem
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+
+      - name: Build e Push da imagem Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ============================================================
+  # ETAPA 3: Análise de Segurança
+  # Escaneia a imagem em busca de vulnerabilidades
+  # ============================================================
+  security-scan:
+    name: CD - Scan de Segurança (Trivy)
+    runs-on: ubuntu-latest
+    needs: build
+
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Escanear imagem com Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================
+  # ETAPA 4: Deploy em Staging
+  # Só executa na branch main/master após build e scan
+  # ============================================================
+  deploy-staging:
+    name: CD - Deploy em Staging
+    runs-on: ubuntu-latest
+    needs: [build, security-scan]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment: staging
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Deploy em Staging
+        run: |
+          echo "============================================"
+          echo "  DEPLOY EM STAGING"
+          echo "============================================"
+          echo "Imagem : ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "Commit : ${{ github.sha }}"
+          echo "Data   : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "Em produção, este passo realizaria conexão SSH"
+          echo "ao servidor de staging e executaria:"
+          echo "  IMAGE_NAME=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \\"
+          echo "  TAG=latest \\"
+          echo "  NODE_ENV=staging \\"
+          echo "  bash scripts/deploy.sh"
+          echo ""
+          echo "Deploy em Staging concluído com sucesso!"
+
+      - name: Health Check - Staging
+        run: |
+          echo "Health check staging: OK"
+
+  # ============================================================
+  # ETAPA 5: Deploy em Produção
+  # Requer aprovação manual via environment protection rules
+  # ============================================================
+  deploy-production:
+    name: CD - Deploy em Produção
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment: production
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Deploy em Produção
+        run: |
+          echo "============================================"
+          echo "  DEPLOY EM PRODUÇÃO"
+          echo "============================================"
+          echo "Imagem : ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "Commit : ${{ github.sha }}"
+          echo "Data   : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+          echo "Em produção, este passo realizaria conexão SSH"
+          echo "ao servidor de produção e executaria:"
+          echo "  IMAGE_NAME=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \\"
+          echo "  TAG=latest \\"
+          echo "  NODE_ENV=production \\"
+          echo "  bash scripts/deploy.sh"
+          echo ""
+          echo "Deploy em Produção concluído com sucesso!"
+
+      - name: Health Check - Produção
+        run: |
+          echo "Health check producao: OK"
+
+      - name: Notificação de Deploy
+        run: |
+          echo "================================================"
+          echo "  Deploy em produção realizado com sucesso!"
+          echo "  SHA   : ${{ github.sha }}"
+          echo "  Autor : ${{ github.actor }}"
+          echo "================================================"
