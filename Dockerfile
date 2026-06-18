@@ -14,6 +14,9 @@ RUN npm install --only=production
 FROM node:22-alpine AS runner
 WORKDIR /app
 
+# Atualiza pacotes do Alpine para eliminar CVEs da imagem base
+RUN apk upgrade --no-cache
+
 # Cria usuário não-root por segurança
 RUN addgroup --system --gid 1001 nodejs && \
   adduser --system --uid 1001 nodeuser
